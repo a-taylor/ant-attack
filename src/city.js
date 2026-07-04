@@ -1,7 +1,19 @@
 import * as THREE from 'three';
+import { MAP_SIZE, MAP_COLUMNS } from './mapdata.js';
 
-export const SIZE = 72;          // city is SIZE x SIZE unit blocks
-const WALL_H = 5;
+// The city is the real Antescher, extracted from the original 1983 snapshot
+// (see ant_attack_original_map_extraction.md). Columns are 6-bit masks of
+// solid unit blocks, not heights — mid-wall holes, arches and floating
+// ledges are real and preserved. World is centered on the origin: cell
+// (ix, iz) spans [ix, ix+1) with ix, iz in -HALF .. HALF-1.
+export const SIZE = MAP_SIZE;   // 128
+export const HALF = MAP_SIZE / 2;
+const LEVELS = 6;
+
+// actors' body height in blocks: what they can walk under / squeeze through.
+// Player and captive need 2 clear levels; ants (DEFAULTS in ants.js: 0.9)
+// crawl through 1-block holes — that's how they get everywhere, like 1983.
+const BODY_H = 1.5;
 
 // palette: near-monochrome whites with faint tints, evoking the "white city"
 const PALETTE = [
@@ -13,41 +25,39 @@ const PALETTE = [
   0xdcdcd0, // stone
 ];
 const WALL_COLOR = 0xb9b4a4;
-const PRISON_COLOR = 0x9aa0ae;
 
 export class City {
-  constructor(seed = Math.random() * 1e9) {
-    this.heights = new Uint8Array(SIZE * SIZE);
-    this.colorIdx = new Uint8Array(SIZE * SIZE); // index into this.colors
-    this.colors = PALETTE.map((c) => new THREE.Color(c));
-    this.colors.push(new THREE.Color(WALL_COLOR));   // idx PALETTE.length
-    this.colors.push(new THREE.Color(PRISON_COLOR)); // idx PALETTE.length + 1
+  constructor() {
+    this.cols = MAP_COLUMNS; // Uint8Array(SIZE*SIZE), index (iz+HALF)*SIZE+(ix+HALF)
 
-    // simple seeded rng (mulberry32)
-    let s = seed >>> 0;
-    this.rand = () => {
-      s |= 0; s = (s + 0x6d2b79f5) | 0;
-      let t = Math.imul(s ^ (s >>> 15), 1 | s);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
+    // fixed key positions on the real architecture (design choices):
+    // spawn just inside the gatehouse's low step-over wall (south),
+    // captive in the high-walled yard in the far north-west.
+    this.spawnPos = new THREE.Vector3(11.5, 0, 55.5);
+    this.gatePos = new THREE.Vector3(11.5, 0, 61.5);
+    this.captivePos = new THREE.Vector3(-50.5, 0, -48.5);
 
-    this.gateX = Math.floor(SIZE / 2);
-    this.generate();
     this.group = this.buildMeshes();
   }
 
-  h(ix, iz) {
-    if (ix < 0 || iz < 0 || ix >= SIZE || iz >= SIZE) return 9; // solid beyond the map
-    return this.heights[iz * SIZE + ix];
-  }
-  set(ix, iz, v, color) {
-    if (ix < 0 || iz < 0 || ix >= SIZE || iz >= SIZE) return;
-    this.heights[iz * SIZE + ix] = v;
-    if (color !== undefined) this.colorIdx[iz * SIZE + ix] = color;
+  // column bitmask at integer cell coords; -1 = out of bounds (treated solid)
+  mask(ix, iz) {
+    const gx = ix + HALF, gz = iz + HALF;
+    if (gx < 0 || gz < 0 || gx >= SIZE || gz >= SIZE) return -1;
+    return this.cols[gz * SIZE + gx];
   }
 
-  // highest column under the square footprint centered at (x, z) with half-size r
+  // column top height (blocks above any gaps included); OOB reports 9 so
+  // nothing ever leaves the map
+  h(ix, iz) {
+    const m = this.mask(ix, iz);
+    if (m < 0) return 9;
+    let t = 0;
+    for (let l = 0; l < LEVELS; l++) if ((m >> l) & 1) t = l + 1;
+    return t;
+  }
+
+  // highest column top under the square footprint centered at (x, z)
   maxH(x, z, r) {
     const x0 = Math.floor(x - r), x1 = Math.floor(x + r);
     const z0 = Math.floor(z - r), z1 = Math.floor(z + r);
@@ -60,20 +70,94 @@ export class City {
     return m;
   }
 
+  // is there a solid block containing height y anywhere in the footprint?
+  solidAt(x, y, z, r = 0) {
+    const l = Math.floor(y);
+    const x0 = Math.floor(x - r), x1 = Math.floor(x + r);
+    const z0 = Math.floor(z - r), z1 = Math.floor(z + r);
+    for (let iz = z0; iz <= z1; iz++)
+      for (let ix = x0; ix <= x1; ix++) {
+        const m = this.mask(ix, iz);
+        if (m < 0) return true;
+        if (l >= 0 && l < LEVELS && (m >> l) & 1) return true;
+      }
+    return false;
+  }
+
+  // top of the highest block whose top is at or below y + allow (i.e. the
+  // surface an actor at feet-height y can be standing on / land on)
+  floorUnder(x, z, r, y, allow) {
+    const x0 = Math.floor(x - r), x1 = Math.floor(x + r);
+    const z0 = Math.floor(z - r), z1 = Math.floor(z + r);
+    let f = 0;
+    for (let iz = z0; iz <= z1; iz++)
+      for (let ix = x0; ix <= x1; ix++) {
+        const m = this.mask(ix, iz);
+        if (m < 0) { f = Math.max(f, 9); continue; }
+        for (let l = 0; l < LEVELS; l++)
+          if ((m >> l) & 1 && l + 1 <= y + allow && l + 1 > f) f = l + 1;
+      }
+    return f;
+  }
+
+  // bottom of the lowest block fully above the actor's head
+  ceilingAbove(x, z, r, y, height) {
+    const x0 = Math.floor(x - r), x1 = Math.floor(x + r);
+    const z0 = Math.floor(z - r), z1 = Math.floor(z + r);
+    let c = Infinity;
+    for (let iz = z0; iz <= z1; iz++)
+      for (let ix = x0; ix <= x1; ix++) {
+        const m = this.mask(ix, iz);
+        if (m <= 0) continue;
+        for (let l = 0; l < LEVELS; l++)
+          if ((m >> l) & 1 && l >= y + height - 1e-3 && l < c) c = l;
+      }
+    return c;
+  }
+
+  // can a body (radius r, height h, feet at y, allowed to step up `step`)
+  // occupy (x, z)? Blocks entirely below y+step are steppable, anything else
+  // overlapping the body blocks. Walking under arches falls out naturally.
+  canOccupy(x, z, r, y, step, h) {
+    const x0 = Math.floor(x - r), x1 = Math.floor(x + r);
+    const z0 = Math.floor(z - r), z1 = Math.floor(z + r);
+    let sup = 0; // where the feet would rest after any step-up
+    for (let iz = z0; iz <= z1; iz++)
+      for (let ix = x0; ix <= x1; ix++) {
+        const m = this.mask(ix, iz);
+        if (m < 0) return false;
+        for (let l = 0; l < LEVELS; l++)
+          if ((m >> l) & 1 && l + 1 <= y + step && l + 1 > sup) sup = l + 1;
+      }
+    const feet = Math.max(y, sup);
+    for (let iz = z0; iz <= z1; iz++)
+      for (let ix = x0; ix <= x1; ix++) {
+        const m = this.mask(ix, iz);
+        for (let l = 0; l < LEVELS; l++)
+          if ((m >> l) & 1 && l + 1 > y + step && l < feet + h) return false;
+      }
+    return true;
+  }
+
   // shared kinematics for player / ants / captive. actor: {pos, vel, radius, onGround}
-  // Grounded actors auto-step up single blocks; taller columns stop them.
-  moveActor(a, dt, { gravity = 25, maxStep = 1.06 } = {}) {
+  // Grounded actors auto-step up single blocks; taller obstacles stop them.
+  // `height` is body height: blocks overhead block or are walked under.
+  moveActor(a, dt, { gravity = 25, maxStep = 1.06, height = BODY_H } = {}) {
     const step = a.onGround ? maxStep : 0.06;
     const nx = a.pos.x + a.vel.x * dt;
-    if (this.maxH(nx, a.pos.z, a.radius) <= a.pos.y + step) a.pos.x = nx;
+    if (this.canOccupy(nx, a.pos.z, a.radius, a.pos.y, step, height)) a.pos.x = nx;
     else a.vel.x = 0;
     const nz = a.pos.z + a.vel.z * dt;
-    if (this.maxH(a.pos.x, nz, a.radius) <= a.pos.y + step) a.pos.z = nz;
+    if (this.canOccupy(a.pos.x, nz, a.radius, a.pos.y, step, height)) a.pos.z = nz;
     else a.vel.z = 0;
 
     a.vel.y -= gravity * dt;
     let ny = a.pos.y + a.vel.y * dt;
-    const floor = this.maxH(a.pos.x, a.pos.z, a.radius * 0.85);
+    if (a.vel.y > 0) {
+      const ceil = this.ceilingAbove(a.pos.x, a.pos.z, a.radius * 0.85, a.pos.y, height);
+      if (ny + height > ceil) { ny = ceil - height; a.vel.y = 0; }
+    }
+    const floor = this.floorUnder(a.pos.x, a.pos.z, a.radius * 0.85, a.pos.y, step);
     if (ny <= floor + 1e-3) {
       ny = floor;
       a.vel.y = 0;
@@ -84,155 +168,78 @@ export class City {
     a.pos.y = ny;
   }
 
-  generate() {
-    const R = this.rand;
-    const WALL_IDX = PALETTE.length;
-    const PRISON_IDX = PALETTE.length + 1;
-
-    // ---- perimeter wall (2 cells thick) ----
-    for (let i = 0; i < SIZE; i++) {
-      for (let t = 0; t < 2; t++) {
-        this.set(i, t, WALL_H, WALL_IDX);
-        this.set(i, SIZE - 1 - t, WALL_H, WALL_IDX);
-        this.set(t, i, WALL_H, WALL_IDX);
-        this.set(SIZE - 1 - t, i, WALL_H, WALL_IDX);
-      }
-    }
-
-    // ---- street grid -> building plots ----
-    const lines = (from, to) => {
-      const out = [from];
-      let v = from;
-      while (v < to - 10) {
-        v += 8 + Math.floor(R() * 5);
-        out.push(Math.min(v, to));
-      }
-      out.push(to);
-      return out;
-    };
-    const xs = lines(2, SIZE - 2);
-    const zs = lines(2, SIZE - 2);
-
-    // staircases are placed after the ring road / gate / prison carves so those
-    // can't delete them (carving a building's only stairs left its roof unreachable)
-    const stairJobs = [];
-
-    for (let zi = 0; zi < zs.length - 1; zi++) {
-      for (let xi = 0; xi < xs.length - 1; xi++) {
-        const x0 = xs[xi] + 2, x1 = xs[xi + 1] - 1;
-        const z0 = zs[zi] + 2, z1 = zs[zi + 1] - 1;
-        if (x1 - x0 < 2 || z1 - z0 < 2) continue;
-        if (R() < 0.16) continue; // plaza
-
-        const color = Math.floor(R() * PALETTE.length);
-        const hMax = 2 + Math.floor(R() * 4); // 2..5
-
-        if (R() < 0.45) {
-          // ziggurat: stepped pyramid, climbable from every side
-          for (let iz = z0; iz <= z1; iz++)
-            for (let ix = x0; ix <= x1; ix++) {
-              const edge = Math.min(ix - x0, x1 - ix, iz - z0, z1 - iz);
-              this.set(ix, iz, Math.min(hMax, edge + 1), color);
-            }
-        } else {
-          // flat-roofed block with an external staircase strip
-          for (let iz = z0; iz <= z1; iz++)
-            for (let ix = x0; ix <= x1; ix++) this.set(ix, iz, hMax, color);
-
-          stairJobs.push({ x0, x1, z0, z1, hMax, color, side: Math.floor(R() * 4) });
-        }
-      }
-    }
-
-    // ---- ring road inside the wall: guarantees every street connects ----
-    for (let i = 2; i < SIZE - 2; i++)
-      for (const t of [2, 3, SIZE - 4, SIZE - 3]) {
-        this.set(i, t, 0);
-        this.set(t, i, 0);
-      }
-
-    // ---- south gate: carve an opening and a clear approach ----
-    const g = this.gateX;
-    for (let dz = 0; dz < 2; dz++)
-      for (let dx = -1; dx <= 1; dx++) this.set(g + dx, SIZE - 1 - dz, 0, WALL_IDX);
-    for (let iz = SIZE - 6; iz <= SIZE - 3; iz++)
-      for (let ix = g - 3; ix <= g + 3; ix++) this.set(ix, iz, 0);
-
-    // ---- prison enclosure in the north ----
-    const pcx = Math.floor(SIZE / 2 + (R() - 0.5) * 20);
-    const pcz = 7;
-    for (let iz = pcz - 4; iz <= pcz + 4; iz++)
-      for (let ix = pcx - 4; ix <= pcx + 4; ix++) this.set(ix, iz, 0);
-    for (let d = -3; d <= 3; d++) {
-      this.set(pcx + d, pcz - 3, 3, PRISON_IDX);
-      this.set(pcx + d, pcz + 3, 3, PRISON_IDX);
-      this.set(pcx - 3, pcz + d, 3, PRISON_IDX);
-      this.set(pcx + 3, pcz + d, 3, PRISON_IDX);
-    }
-    this.set(pcx, pcz + 3, 0, PRISON_IDX); // doorway facing south
-    this.prisonPos = new THREE.Vector3(pcx + 0.5, 0, pcz + 0.5);
-
-    // ---- external staircases, on ground that is now final ----
-    for (const { x0, x1, z0, z1, hMax, color, side } of stairJobs) {
-      for (let k = 0; k < hMax - 1; k++) {
-        let sx, sz;
-        if (side === 0) { sx = x0 + k; sz = z1 + 1; }
-        else if (side === 1) { sx = x0 + k; sz = z0 - 1; }
-        else if (side === 2) { sx = x1 + 1; sz = z0 + k; }
-        else { sx = x0 - 1; sz = z0 + k; }
-        if (sx < 3 || sz < 3 || sx > SIZE - 4 || sz > SIZE - 4) break;
-        if (this.h(sx, sz) === 0) this.set(sx, sz, k + 1, color);
-      }
-    }
-
-    this.spawnPos = new THREE.Vector3(g + 0.5, 0, SIZE - 4.5);
-    this.gatePos = new THREE.Vector3(g + 0.5, 0, SIZE - 1.5);
-  }
-
+  // the walled pocket between the gatehouse's low wall and the open south edge
   inGateZone(pos) {
-    return pos.z > SIZE - 4 && Math.abs(pos.x - (this.gateX + 0.5)) < 2.5 && pos.y < 1.5;
+    return pos.z > 59.2 && pos.x > 3 && pos.x < 19 && pos.y < 1.5;
   }
 
-  // random flat street cell, at least minDist from `away`
-  randomStreetPos(away, minDist) {
-    for (let tries = 0; tries < 200; tries++) {
-      const ix = 3 + Math.floor(this.rand() * (SIZE - 6));
-      const iz = 3 + Math.floor(this.rand() * (SIZE - 6));
-      if (this.h(ix, iz) !== 0) continue;
+  // random fully-open street cell, at least minDist and at most maxDist from `away`
+  randomStreetPos(away, minDist, maxDist = Infinity) {
+    for (let tries = 0; tries < 400; tries++) {
+      const ix = 1 - HALF + Math.floor(Math.random() * (SIZE - 2));
+      const iz = 1 - HALF + Math.floor(Math.random() * (SIZE - 2));
+      if (this.mask(ix, iz) !== 0) continue;
       const p = new THREE.Vector3(ix + 0.5, 0, iz + 0.5);
-      if (!away || p.distanceTo(away) >= minDist) return p;
+      if (!away) return p;
+      const d = p.distanceTo(away);
+      if (d >= minDist && (d <= maxDist || tries > 200)) return p;
     }
     return this.spawnPos.clone();
   }
 
   buildMeshes() {
     const group = new THREE.Group();
+    const colors = PALETTE.map((c) => new THREE.Color(c));
+    const wallColor = new THREE.Color(WALL_COLOR);
 
-    // count exposed blocks, then instance them
-    const exposed = [];
-    for (let iz = 0; iz < SIZE; iz++)
-      for (let ix = 0; ix < SIZE; ix++) {
-        const h = this.h(ix, iz);
-        for (let y = 0; y < h; y++) {
-          const top = y === h - 1;
-          const side =
-            this.h(ix - 1, iz) <= y || this.h(ix + 1, iz) <= y ||
-            this.h(ix, iz - 1) <= y || this.h(ix, iz + 1) <= y;
-          if (top || side) exposed.push(ix, y, iz);
+    // per-building color: flood-fill connected solid columns; components
+    // touching the map border are the perimeter wall
+    const compOf = new Int16Array(SIZE * SIZE).fill(-1);
+    const compColor = [];
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      if (this.cols[i] === 0 || compOf[i] >= 0) continue;
+      const comp = compColor.length;
+      let onBorder = false;
+      const stack = [i];
+      compOf[i] = comp;
+      while (stack.length) {
+        const j = stack.pop();
+        const gx = j % SIZE, gz = (j / SIZE) | 0;
+        if (gx === 0 || gz === 0 || gx === SIZE - 1 || gz === SIZE - 1) onBorder = true;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = gx + dx, nz = gz + dz;
+          if (nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE) continue;
+          const k = nz * SIZE + nx;
+          if (this.cols[k] !== 0 && compOf[k] < 0) { compOf[k] = comp; stack.push(k); }
         }
       }
+      compColor.push(onBorder ? wallColor : colors[comp % colors.length]);
+    }
 
-    const count = exposed.length / 3;
+    // one instance per solid voxel (~5.6k — the real city is sparse)
+    let count = 0;
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      let m = this.cols[i];
+      while (m) { count += m & 1; m >>= 1; }
+    }
     const geo = new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshLambertMaterial();
     const inst = new THREE.InstancedMesh(geo, mat, count);
-    const m = new THREE.Matrix4();
-    for (let i = 0; i < count; i++) {
-      const ix = exposed[i * 3], y = exposed[i * 3 + 1], iz = exposed[i * 3 + 2];
-      m.makeTranslation(ix + 0.5, y + 0.5, iz + 0.5);
-      inst.setMatrixAt(i, m);
-      inst.setColorAt(i, this.colors[this.colorIdx[iz * SIZE + ix]]);
-    }
+    const mtx = new THREE.Matrix4();
+    let n = 0;
+    for (let gz = 0; gz < SIZE; gz++)
+      for (let gx = 0; gx < SIZE; gx++) {
+        const i = gz * SIZE + gx;
+        const m = this.cols[i];
+        if (m === 0) continue;
+        for (let l = 0; l < LEVELS; l++) {
+          if (!((m >> l) & 1)) continue;
+          mtx.makeTranslation(gx - HALF + 0.5, l + 0.5, gz - HALF + 0.5);
+          inst.setMatrixAt(n, mtx);
+          inst.setColorAt(n, compColor[compOf[i]]);
+          n++;
+        }
+      }
     inst.instanceMatrix.needsUpdate = true;
     group.add(inst);
 
@@ -242,15 +249,16 @@ export class City {
       new THREE.MeshLambertMaterial({ color: 0x8f8878 })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(SIZE / 2, -0.02, SIZE / 2);
+    ground.position.set(0, -0.02, 0);
     group.add(ground);
 
-    // gate marker posts
+    // gate marker posts standing on the ends of the gatehouse's low
+    // step-over wall (the wall top is at y=1)
     const postGeo = new THREE.BoxGeometry(0.3, 3.4, 0.3);
     const postMat = new THREE.MeshLambertMaterial({ color: 0xffd24a });
-    for (const dx of [-1.7, 1.7]) {
+    for (const px of [8.5, 13.5]) {
       const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(this.gateX + 0.5 + dx, 1.7, SIZE - 2.5);
+      post.position.set(px, 1 + 1.7, 58.5);
       group.add(post);
     }
     return group;

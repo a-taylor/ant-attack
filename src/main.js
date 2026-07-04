@@ -9,7 +9,7 @@ import { Captive } from './captive.js';
 import { Hud } from './hud.js';
 import { sfx } from './sfx.js';
 
-const TIME_LIMIT = 300;
+const TIME_LIMIT = 360;
 const START_GRENADES = 20;
 const START_LIVES = 5;
 const SKY = 0x0c1022;
@@ -45,7 +45,7 @@ const followCam = new FollowCamera(camera);
 const hud = new Hud();
 const player = new Player(city, scene);
 const captive = new Captive(city, scene);
-const ants = new AntManager(city, scene, 8);
+const ants = new AntManager(city, scene, 10);
 const grenades = new GrenadeManager(scene, city, (pos, radius) => {
   const kills = ants.damageAt(pos, radius);
   if (kills > 0) hud.message(kills > 1 ? `${kills} ANTS DOWN!` : 'ANT DOWN!', 1.5);
@@ -69,7 +69,7 @@ function resetRound() {
   game.grenadeCount = START_GRENADES;
   game.warned = false;
   player.reset(city.spawnPos);
-  captive.reset(city.prisonPos);
+  captive.reset(city.captivePos);
   ants.reset(player.pos);
   grenades.clear();
   followCam.targetYaw = 0;
@@ -78,7 +78,7 @@ function resetRound() {
   hud.setTime(game.timeLeft);
   hud.setLives(game.lives);
   hud.setGrenades(game.grenadeCount);
-  hud.setObjective('RESCUE THE CAPTIVE — THEY ARE HELD IN THE NORTH OF THE CITY');
+  hud.setObjective('RESCUE THE CAPTIVE — THEY ARE HELD IN A WALLED YARD IN THE NORTH-WEST');
 }
 
 function startGame() {

@@ -1,3 +1,9 @@
 node_modules/
 dist/
 .DS_Store
+
+# one-time extraction artifacts (regenerable; do not redistribute the snapshot)
+ant_attack.z80
+ant_attack_map.json
+ant_attack_map_dense.json
+map_preview.png

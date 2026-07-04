@@ -121,8 +121,9 @@ class Ant {
     this.vel.z = Math.cos(this.heading) * speed;
 
     const before = this.pos.clone();
-    // ants cannot climb — like the original, they only roam the floor level
-    this.city.moveActor(this, dt, { maxStep: 0.06 });
+    // ants cannot climb — like the original, they only roam the floor level,
+    // but their low body squeezes through 1-block holes in the walls
+    this.city.moveActor(this, dt, { maxStep: 0.06, height: 0.9 });
     const moved = Math.hypot(this.pos.x - before.x, this.pos.z - before.z);
     if (moved < speed * dt * 0.3) {
       // stuck against something too tall — sidestep for a moment
@@ -152,7 +153,7 @@ export class AntManager {
 
   reset(playerPos) {
     for (const ant of this.ants) {
-      ant.spawnAt(this.city.randomStreetPos(playerPos, 14));
+      ant.spawnAt(this.city.randomStreetPos(playerPos, 14, 45));
       ant.respawnTimer = 0;
     }
   }
@@ -161,7 +162,7 @@ export class AntManager {
     for (const ant of this.ants) {
       if (ant.dead && ant.deathAnim <= 0) {
         ant.respawnTimer -= dt;
-        if (ant.respawnTimer <= 0) ant.spawnAt(this.city.randomStreetPos(playerPos, 16));
+        if (ant.respawnTimer <= 0) ant.spawnAt(this.city.randomStreetPos(playerPos, 16, 50));
       }
       ant.update(dt, playerPos, playerAlive);
     }

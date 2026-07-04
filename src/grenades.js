@@ -69,7 +69,7 @@ export class GrenadeManager {
         const next = g.pos[axis] + g.vel[axis] * dt;
         const test = g.pos.clone();
         test[axis] = next;
-        if (this.city.maxH(test.x, test.z, 0.12) > g.pos.y + 0.05) {
+        if (this.city.solidAt(test.x, g.pos.y + 0.05, test.z, 0.12)) {
           g.vel[axis] *= -0.45;
         } else {
           g.pos[axis] = next;
@@ -77,7 +77,7 @@ export class GrenadeManager {
       }
       // vertical with floor bounce
       g.pos.y += g.vel.y * dt;
-      const floor = this.city.maxH(g.pos.x, g.pos.z, 0.12);
+      const floor = this.city.floorUnder(g.pos.x, g.pos.z, 0.12, g.pos.y, 0.06);
       if (g.pos.y <= floor + 0.05) {
         g.pos.y = floor + 0.05;
         if (g.vel.y < -1.5) {

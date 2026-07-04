@@ -1,7 +1,8 @@
-// Headless smoke tests for city generation and the shared actor physics.
-// Run with: npm test  (no browser needed — City only touches Three.js math/geometry)
+// Headless smoke tests for the real-Antescher map loader and the shared
+// actor physics. Run with: npm test  (no browser needed — City only touches
+// Three.js math/geometry)
 import * as THREE from 'three';
-import { City, SIZE } from '../src/city.js';
+import { City, SIZE, HALF } from '../src/city.js';
 
 let failures = 0;
 const check = (name, cond) => {
@@ -9,66 +10,35 @@ const check = (name, cond) => {
   if (!cond) failures++;
 };
 
-const city = new City(12345);
+const city = new City();
 
-// spawn & key positions are on walkable ground
-check('spawn on ground', city.maxH(city.spawnPos.x, city.spawnPos.z, 0.3) === 0);
-check('prison interior clear', city.maxH(city.prisonPos.x, city.prisonPos.z, 0.3) === 0);
-check('gate zone detects spawn-adjacent', city.inGateZone(new THREE.Vector3(city.gateX + 0.5, 0, SIZE - 1.5)));
+// key positions sit on fully open ground
+check('spawn on open ground', city.mask(Math.floor(city.spawnPos.x), Math.floor(city.spawnPos.z)) === 0);
+check('captive cell open', city.mask(Math.floor(city.captivePos.x), Math.floor(city.captivePos.z)) === 0);
+check('gate zone accepts gatePos', city.inGateZone(city.gatePos));
 check('gate zone rejects spawn', !city.inGateZone(city.spawnPos));
 
 // map has buildings and streets
 let blocks = 0, streets = 0;
-for (let i = 0; i < SIZE * SIZE; i++) {
-  if (city.heights[i] > 0) blocks++;
-  else streets++;
-}
-check(`buildings exist (${blocks} columns)`, blocks > 500);
-check(`streets exist (${streets} cells)`, streets > 800);
-
-// gate passage is open through the wall
-check('gate passage open', city.h(city.gateX, SIZE - 1) === 0 && city.h(city.gateX, SIZE - 2) === 0);
-
-// out-of-bounds is solid (player can't leave the world)
-check('OOB solid', city.maxH(-2, 10, 0.3) === 9 && city.maxH(10, SIZE + 2, 0.3) === 9);
-
-// prison has exactly one doorway at ground level
-let gaps = 0;
-const pcx = Math.floor(city.prisonPos.x), pcz = Math.floor(city.prisonPos.z);
-for (let d = -3; d <= 3; d++) {
-  for (const [ix, iz] of [[pcx + d, pcz - 3], [pcx + d, pcz + 3], [pcx - 3, pcz + d], [pcx + 3, pcz + d]]) {
-    if (city.h(ix, iz) === 0) gaps++;
+for (let iz = -HALF; iz < HALF; iz++)
+  for (let ix = -HALF; ix < HALF; ix++) {
+    if (city.mask(ix, iz) > 0) blocks++;
+    else streets++;
   }
-}
-check(`prison doorway (${gaps} gap cells)`, gaps >= 1 && gaps <= 3);
+check(`buildings exist (${blocks} columns)`, blocks > 2000);
+check(`streets exist (${streets} cells)`, streets > 10000);
 
-// --- BFS reachability: walking allows +1 step up, any drop down ---
-function reachable(from) {
-  const seen = new Set();
-  const key = (x, z) => z * SIZE + x;
-  const q = [[Math.floor(from.x), Math.floor(from.z)]];
-  seen.add(key(q[0][0], q[0][1]));
-  while (q.length) {
-    const [x, z] = q.pop();
-    const h = city.h(x, z);
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = x + dx, nz = z + dz;
-      if (nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE) continue;
-      const nh = city.h(nx, nz);
-      if (nh - h > 1) continue; // too tall to step up
-      const k = key(nx, nz);
-      if (!seen.has(k)) { seen.add(k); q.push([nx, nz]); }
-    }
-  }
-  return seen;
-}
-const reach = reachable(city.spawnPos);
-const cellKey = (p) => Math.floor(p.z) * SIZE + Math.floor(p.x);
-check('prison interior reachable from spawn', reach.has(cellKey(city.prisonPos)));
-check('gate reachable from spawn', reach.has(cellKey(city.gatePos)));
-check(`most of city reachable (${reach.size} cells)`, reach.size > SIZE * SIZE * 0.5);
+// landmark spot-checks against the independently verified extraction:
+// gatehouse low step-over wall, the captive yard's ant-sized ground arch,
+// and the northern canopy roof slab
+check('gatehouse low wall', [8, 9, 10, 11, 12, 13].every((x) => city.mask(x, 58) === 0b000001));
+check('yard ground arch (ants only)', city.mask(-48, -44) === 0b011110);
+check('northern canopy roof', city.mask(-36, -56) === 0b010000);
 
-// walking never sinks below terrain or flies
+// out-of-bounds is solid (nothing can leave the world)
+check('OOB solid', city.maxH(-HALF - 2, 10, 0.3) === 9 && city.maxH(10, HALF + 2, 0.3) === 9);
+
+// walking never sinks below the surface underfoot or flies
 const actor = { pos: city.spawnPos.clone(), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 let ok = true;
 let heading = Math.PI;
@@ -76,43 +46,74 @@ for (let i = 0; i < 600; i++) {
   if (i % 60 === 0) heading += 1.3;
   actor.vel.x = Math.sin(heading) * 4.6; actor.vel.z = Math.cos(heading) * 4.6;
   city.moveActor(actor, 1 / 60);
-  const floor = city.maxH(actor.pos.x, actor.pos.z, actor.radius * 0.85);
-  if (actor.pos.y < floor - 0.01 || actor.pos.y > 9) ok = false;
+  const floor = city.floorUnder(actor.pos.x, actor.pos.z, actor.radius * 0.85, actor.pos.y, 0.06);
+  if (actor.pos.y < floor - 0.01 || actor.pos.y > 6) ok = false;
 }
 check(`wandering walk stays on terrain (y=${actor.pos.y.toFixed(2)})`, ok);
 
-// blocked by the 5-high perimeter wall
-const w = { pos: new THREE.Vector3(10.5, 0, 10.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
-for (let i = 0; i < 400; i++) {
+// blocked by the perimeter wall (west wall from inside)
+const w = { pos: new THREE.Vector3(-55.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+for (let i = 0; i < 500; i++) {
   w.vel.x = -4.6; w.vel.z = 0;
   city.moveActor(w, 1 / 60);
 }
-check(`wall blocks exit (x=${w.pos.x.toFixed(2)}, y=${w.pos.y.toFixed(2)})`, w.pos.x > 1.9 && w.pos.y <= 1.2);
+check(`wall keeps player inside (x=${w.pos.x.toFixed(2)}, y=${w.pos.y.toFixed(2)})`, w.pos.x > -63.9 && w.pos.y <= 1.2);
 
-// steps up a 1-block column when grounded (and walks over + off it)
-const sIx = 30;
-city.set(sIx, 30, 1);
-city.set(sIx - 1, 30, 0);
-city.set(sIx - 2, 30, 0);
-const s = { pos: new THREE.Vector3(sIx - 1.5, 0, 30.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+// steps over the gatehouse's 1-high wall while walking (and down the far side)
+const s = { pos: new THREE.Vector3(11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 let stepApex = 0;
-for (let i = 0; i < 120; i++) {
-  s.vel.x = 3; s.vel.z = 0;
+for (let i = 0; i < 240; i++) {
+  s.vel.x = 0; s.vel.z = 3;
   city.moveActor(s, 1 / 60);
   stepApex = Math.max(stepApex, s.pos.y);
 }
-check(`steps up 1-block while walking (apex=${stepApex.toFixed(2)})`, stepApex >= 1);
+check(`steps over gate wall (apex=${stepApex.toFixed(2)}, z=${s.pos.z.toFixed(2)})`, stepApex >= 1 && s.pos.z > 59.5 && s.pos.y === 0);
 
-// ants pass maxStep 0.06 — even a 1-block column must stop them (ants can't climb)
-const ant = { pos: new THREE.Vector3(sIx - 1.5, 0, 30.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
-for (let i = 0; i < 120; i++) {
-  ant.vel.x = 3; ant.vel.z = 0;
-  city.moveActor(ant, 1 / 60, { maxStep: 0.06 });
+// ants pass maxStep 0.06 — the same 1-high wall must stop them (ants can't climb)
+const ant = { pos: new THREE.Vector3(11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
+for (let i = 0; i < 240; i++) {
+  ant.vel.x = 0; ant.vel.z = 3;
+  city.moveActor(ant, 1 / 60, { maxStep: 0.06, height: 0.9 });
 }
-check(`ground-bound actor blocked by 1-block step (x=${ant.pos.x.toFixed(2)}, y=${ant.pos.y.toFixed(2)})`, ant.pos.y === 0 && ant.pos.x < sIx - 0.2);
+check(`ant blocked by 1-block step (z=${ant.pos.z.toFixed(2)})`, ant.pos.y === 0 && ant.pos.z < 57.8);
 
-// jump clears ~1.4 blocks: enough for 1-block ledges, never 2 (keeps walls unclimbable)
-const j = { pos: new THREE.Vector3(city.spawnPos.x, 0, city.spawnPos.z), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
+// ...but an ant's low body crawls through the yard's 1-block ground arch
+const crawler = { pos: new THREE.Vector3(-47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
+for (let i = 0; i < 240; i++) {
+  crawler.vel.x = 0; crawler.vel.z = -3;
+  city.moveActor(crawler, 1 / 60, { maxStep: 0.06, height: 0.9 });
+}
+check(`ant crawls through ground arch (z=${crawler.pos.z.toFixed(2)})`, crawler.pos.z < -44.5 && crawler.pos.y === 0);
+
+// the player is too tall for that arch
+const tall = { pos: new THREE.Vector3(-47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+for (let i = 0; i < 240; i++) {
+  tall.vel.x = 0; tall.vel.z = -3;
+  city.moveActor(tall, 1 / 60);
+}
+check(`player blocked by ant-sized arch (z=${tall.pos.z.toFixed(2)})`, tall.pos.z > -43.5);
+
+// walks freely under the northern canopy (roof slab at level 4, open below)
+const c = { pos: new THREE.Vector3(-39.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+let underOk = true;
+for (let i = 0; i < 300; i++) {
+  c.vel.x = 3; c.vel.z = 0;
+  city.moveActor(c, 1 / 60);
+  if (c.pos.y !== 0) underOk = false;
+}
+check(`walks under canopy (x=${c.pos.x.toFixed(2)})`, underOk && c.pos.x > -29);
+
+// jumping under a 2-level arch bumps the head on its underside
+const b = { pos: new THREE.Vector3(-28.5, 0, -45.5), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
+let bumpApex = 0;
+for (let i = 0; i < 120; i++) {
+  city.moveActor(b, 1 / 60);
+  bumpApex = Math.max(bumpApex, b.pos.y);
+}
+check(`head bumps arch underside (apex=${bumpApex.toFixed(2)})`, bumpApex < 0.7 && b.pos.y === 0);
+
+// jump clears ~1.4 blocks in the open: enough for 1-block ledges, never 2
+const j = { pos: city.spawnPos.clone(), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
 let apex = 0;
 for (let i = 0; i < 120; i++) {
   city.moveActor(j, 1 / 60);
@@ -120,15 +121,9 @@ for (let i = 0; i < 120; i++) {
 }
 check(`jump apex ~1.4 (${apex.toFixed(2)})`, apex > 1.2 && apex < 1.7 && j.pos.y === 0);
 
-// mesh built with sane instance count
+// every solid voxel of the original city is instanced
 const inst = city.group.children[0];
-check(`instanced blocks (${inst.count})`, inst.count > 1000 && inst.count < 40000);
-
-// different seeds -> different cities
-const city2 = new City(999);
-let diff = 0;
-for (let i = 0; i < SIZE * SIZE; i++) if (city.heights[i] !== city2.heights[i]) diff++;
-check(`seeded variety (${diff} differing cells)`, diff > 200);
+check(`instanced voxels (${inst.count})`, inst.count === 5560);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`);
 process.exit(failures ? 1 : 0);

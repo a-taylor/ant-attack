@@ -26,12 +26,12 @@ export class Captive {
     scene.add(this.mesh, this.shadow);
   }
 
-  reset(prisonPos) {
-    this.pos.copy(prisonPos);
+  reset(startPos) {
+    this.pos.copy(startPos);
     this.vel.set(0, 0, 0);
     this.freed = false;
-    this.visualY = prisonPos.y;
-    this.mesh.position.copy(prisonPos);
+    this.visualY = startPos.y;
+    this.mesh.position.copy(startPos);
   }
 
   free() {

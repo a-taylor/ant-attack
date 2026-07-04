@@ -58,7 +58,7 @@ export function makeBlobShadow(radius) {
 }
 
 export function updateBlobShadow(shadow, city, pos, radius) {
-  const floor = city.maxH(pos.x, pos.z, radius * 0.5);
+  const floor = city.floorUnder(pos.x, pos.z, radius * 0.5, pos.y, 0.5);
   shadow.position.set(pos.x, floor + 0.03, pos.z);
   const drop = pos.y - floor;
   const s = Math.max(0.3, 1 - drop * 0.15);
