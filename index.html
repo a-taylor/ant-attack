@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ANT ATTACK — Antescher</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230c1022'/><rect x='5' y='5' width='6' height='6' fill='%23e9e5d8'/></svg>" />
+  <style>
+    :root {
+      --ui: #d8f0ff;
+      --dim: #7a92a8;
+      --accent: #ffd24a;
+      --bad: #ff5a5a;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1022; }
+    body {
+      font-family: "Courier New", ui-monospace, monospace;
+      color: var(--ui);
+      -webkit-font-smoothing: none;
+      user-select: none;
+    }
+    canvas { display: block; image-rendering: pixelated; }
+
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 18px;
+      font-weight: bold; font-size: 20px; letter-spacing: 2px;
+      text-shadow: 2px 2px 0 #000;
+      pointer-events: none;
+    }
+    #hud .box {
+      background: rgba(4, 8, 24, 0.62);
+      border: 2px solid #33456b;
+      padding: 4px 12px;
+    }
+    #hud #timer.low { color: var(--bad); animation: blink 0.5s steps(2) infinite; }
+    #hud #lives { color: var(--bad); }
+    #hud #grenades { color: var(--accent); }
+
+    #objective {
+      position: fixed; top: 56px; left: 0; right: 0;
+      text-align: center; font-size: 14px; letter-spacing: 3px;
+      color: var(--dim); text-shadow: 1px 1px 0 #000;
+      pointer-events: none;
+    }
+    #message {
+      position: fixed; bottom: 12%; left: 0; right: 0;
+      text-align: center; font-size: 22px; font-weight: bold; letter-spacing: 4px;
+      color: var(--accent); text-shadow: 2px 2px 0 #000;
+      pointer-events: none; opacity: 0; transition: opacity 0.25s;
+    }
+    #message.show { opacity: 1; }
+
+    #overlay {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      background: rgba(6, 8, 20, 0.82);
+      text-align: center; z-index: 10;
+    }
+    #overlay.hidden { display: none; }
+    #overlay h1 {
+      font-size: 64px; letter-spacing: 12px; color: #fff;
+      text-shadow: 4px 4px 0 #b1002e, 8px 8px 0 #000;
+      margin-bottom: 6px;
+    }
+    #overlay h2 { font-size: 18px; letter-spacing: 6px; color: var(--dim); margin-bottom: 34px; font-weight: normal; }
+    #overlay .big { font-size: 40px; letter-spacing: 8px; margin-bottom: 20px; }
+    #overlay .win { color: #6dff8a; text-shadow: 3px 3px 0 #044; }
+    #overlay .lose { color: var(--bad); text-shadow: 3px 3px 0 #400; }
+    #overlay p { font-size: 15px; letter-spacing: 2px; line-height: 1.9; color: var(--ui); }
+    #overlay .press { margin-top: 30px; font-size: 18px; color: var(--accent); animation: blink 0.9s steps(2) infinite; }
+    #overlay .chars { display: flex; gap: 40px; margin: 22px 0 4px; font-size: 17px; }
+    #overlay .chars span { padding: 8px 20px; border: 2px solid #33456b; color: var(--dim); }
+    #overlay .chars span.sel { border-color: var(--accent); color: #fff; background: rgba(255, 210, 74, 0.12); }
+
+    #scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 20;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 2px, transparent 4px);
+      opacity: 0.5;
+    }
+    @keyframes blink { 50% { opacity: 0.15; } }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div class="box">TIME <span id="timer">5:00</span></div>
+    <div class="box">LIVES <span id="lives">&#9829;&#9829;&#9829;&#9829;&#9829;</span></div>
+    <div class="box">GRENADES <span id="grenades">20</span></div>
+  </div>
+  <div id="objective"></div>
+  <div id="message"></div>
+
+  <div id="overlay">
+    <h1>ANT ATTACK</h1>
+    <h2>THE WALLED CITY OF ANTESCHER &mdash; 1983 / 2026</h2>
+    <p>
+      GIANT ANTS HAVE OVERRUN THE CITY.<br>
+      SOMEONE IS TRAPPED INSIDE. RESCUE THEM AND<br>
+      ESCAPE THROUGH THE GATE BEFORE TIME RUNS OUT.
+    </p>
+    <div class="chars">
+      <span id="char-sandy" class="sel">1 &mdash; SANDY</span>
+      <span id="char-sandra">2 &mdash; SANDRA</span>
+    </div>
+    <p style="color:#7a92a8">
+      WASD / ARROWS &mdash; MOVE &nbsp;&nbsp; SPACE &mdash; JUMP &nbsp;&nbsp; G &mdash; GRENADE<br>
+      Q / E &mdash; ROTATE VIEW (MOUSE DRAG TO ORBIT)
+    </p>
+    <div class="press">PRESS ENTER TO BEGIN</div>
+  </div>
+
+  <div id="scanlines"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
