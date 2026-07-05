@@ -11,9 +11,10 @@ export const HALF = MAP_SIZE / 2;
 const LEVELS = 6;
 
 // actors' body height in blocks: what they can walk under / squeeze through.
-// Player and captive need 2 clear levels; ants (DEFAULTS in ants.js: 0.9)
-// crawl through 1-block holes — that's how they get everywhere, like 1983.
-const BODY_H = 1.5;
+// Player and captive fit 1-block holes and arches, exactly like the original
+// game's figures; ants (0.9, passed from ants.js) do too. Kept just under 1.0
+// so the strict less-than in canOccupy never sits on the knife edge.
+const BODY_H = 0.98;
 
 // palette: near-monochrome whites with faint tints, evoking the "white city"
 const PALETTE = [

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 
-// Blocky little humanoid, ~1.5 units tall, origin at the feet.
+// Blocky little humanoid, origin at the feet. Proportions are authored at
+// ~1.44 units tall and uniformly scaled to 0.96 — just under BODY_H (0.98)
+// so the figure visibly fits through the 1-block holes the physics allow,
+// without grazing arch undersides at y=1.
+const FIG_SCALE = 2 / 3;
 // Returns { group, parts } where parts hold the animatable limbs & tintable materials.
 export function buildHumanoid({ skin, hair, shirt, legs: legColor }) {
   const g = new THREE.Group();
@@ -33,6 +37,7 @@ export function buildHumanoid({ skin, hair, shirt, legs: legColor }) {
   hairCap.position.y = 1.38;
 
   g.add(legL, legR, torso, armL, armR, head, hairCap);
+  g.scale.setScalar(FIG_SCALE);
   return {
     group: g,
     parts: { legL, legR, armL, armR, head, hairCap, skinMat, hairMat, shirtMat, legMat },

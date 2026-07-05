@@ -32,7 +32,7 @@ check(`streets exist (${streets} cells)`, streets > 10000);
 // gatehouse low step-over wall, the captive yard's ant-sized ground arch,
 // and the northern canopy roof slab
 check('gatehouse low wall', [-14, -13, -12, -11, -10, -9].every((x) => city.mask(x, 58) === 0b000001));
-check('yard ground arch (ants only)', city.mask(47, -44) === 0b011110);
+check('yard ground arch', city.mask(47, -44) === 0b011110);
 check('northern canopy roof', city.mask(35, -56) === 0b010000);
 
 // out-of-bounds is solid (nothing can leave the world)
@@ -85,13 +85,14 @@ for (let i = 0; i < 240; i++) {
 }
 check(`ant crawls through ground arch (z=${crawler.pos.z.toFixed(2)})`, crawler.pos.z < -44.5 && crawler.pos.y === 0);
 
-// the player is too tall for that arch
+// ...and so does the player: like the original game's figures, the player
+// fits through a 1x1x1 hole
 const tall = { pos: new THREE.Vector3(47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
-for (let i = 0; i < 240; i++) {
+for (let i = 0; i < 80; i++) {
   tall.vel.x = 0; tall.vel.z = -3;
   city.moveActor(tall, 1 / 60);
 }
-check(`player blocked by ant-sized arch (z=${tall.pos.z.toFixed(2)})`, tall.pos.z > -43.5);
+check(`player crawls through ground arch too (z=${tall.pos.z.toFixed(2)})`, tall.pos.z < -44.5 && tall.pos.y === 0);
 
 // walks freely under the northern canopy (roof slab at level 4, open below)
 const c = { pos: new THREE.Vector3(39.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
@@ -104,13 +105,14 @@ for (let i = 0; i < 300; i++) {
 check(`walks under canopy (x=${c.pos.x.toFixed(2)})`, underOk && c.pos.x < 29);
 
 // jumping under a 2-level arch bumps the head on its underside
+// (clamped to 2 - BODY_H ~= 1.02, well short of the open-air apex ~1.4)
 const b = { pos: new THREE.Vector3(28.5, 0, -45.5), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
 let bumpApex = 0;
 for (let i = 0; i < 120; i++) {
   city.moveActor(b, 1 / 60);
   bumpApex = Math.max(bumpApex, b.pos.y);
 }
-check(`head bumps arch underside (apex=${bumpApex.toFixed(2)})`, bumpApex < 0.7 && b.pos.y === 0);
+check(`head bumps arch underside (apex=${bumpApex.toFixed(2)})`, bumpApex > 0.9 && bumpApex < 1.15 && b.pos.y === 0);
 
 // jump clears ~1.4 blocks in the open: enough for 1-block ledges, never 2
 const j = { pos: city.spawnPos.clone(), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };

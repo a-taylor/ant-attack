@@ -1,6 +1,7 @@
 // Map-data integrity and walk-connectivity for the fixed, real Antescher map.
-// The BFS mirrors moveActor's rules: stand on a supported level with 2 clear
-// levels of headroom, step up <= 1 level, drop any height. This must keep
+// The BFS mirrors moveActor's rules: stand on a supported level with 1 clear
+// level of headroom (BODY_H < 1: the player fits 1-block holes like the
+// original), step up <= 1 level, drop any height. This must keep
 // spawn -> captive yard -> gate mutually reachable, or the game is unwinnable.
 import { City, SIZE, HALF } from '../src/city.js';
 
@@ -21,12 +22,11 @@ for (let iz = -HALF; iz < HALF; iz++)
   }
 check(`voxel count (${voxels})`, voxels === 5560);
 
-// an actor can stand at level L of a column: supported from below, and both
-// body levels (L, L+1) clear — matches BODY_H 1.5 in moveActor
+// an actor can stand at level L of a column: supported from below, and the
+// body level (L) clear — matches BODY_H 0.98 in moveActor
 const standable = (m, L) => {
   if (L > 0 && !((m >> (L - 1)) & 1)) return false;
   if (L < 6 && ((m >> L) & 1)) return false;
-  if (L + 1 < 6 && ((m >> (L + 1)) & 1)) return false;
   return true;
 };
 const key = (ix, iz, L) => ((iz + HALF) * SIZE + (ix + HALF)) * 7 + L;

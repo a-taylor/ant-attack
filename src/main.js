@@ -118,7 +118,8 @@ function updatePlaying(dt) {
   if (input.consumePressed('KeyG') && game.grenadeCount > 0) {
     game.grenadeCount--;
     hud.setGrenades(game.grenadeCount);
-    const origin = player.pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+    // release at the scaled figure's hands, below any 1-block arch ceiling
+    const origin = player.pos.clone().add(new THREE.Vector3(0, 0.7, 0));
     grenades.throw(origin, player.facing);
   }
 

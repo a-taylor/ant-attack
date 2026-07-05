@@ -24,9 +24,9 @@ npm test         # headless smoke tests (no browser needed)
   ant-sized ground arch, canopy roof, OOB solid, exact 5560 voxel count), and physics via
   `moveActor` simulation on real map features (walking stays on terrain, wall containment,
   step over the 1-high gate wall, ants blocked by that same step but crawling through the
-  1-block arch the player is too tall for, walking under a canopy, head-bump on an arch
-  underside, jump apex ≈ 1.4).
-- `test/map.mjs` — voxel-aware BFS (stand levels + 2-level headroom, step ≤ 1, drop any):
+  1-block arch — and the player crawling through it too, walking under a canopy, head-bump
+  on an arch underside, jump apex ≈ 1.4).
+- `test/map.mjs` — voxel-aware BFS (stand levels + 1-level headroom, step ≤ 1, drop any):
   spawn → captive yard → gate mutually reachable, ≥99% of ground cells connected, and
   enough elevated ant-proof stands reachable (rooftop-refuge mechanic).
 
@@ -55,8 +55,8 @@ Everything flows from this:
   `src/city.js` is the single shared kinematics routine for player, ants, and captive.
   Actors are `{pos, vel, radius, onGround}` with `pos.y` = feet height. Grounded actors
   auto-step up ≤1 block. `height` is the body height used for horizontal blocking and
-  ceilings: blocks overhead either block or are walked under, so the player/captive (1.5)
-  need 2 clear levels while ants (0.9) crawl through 1-block holes. Out-of-bounds is
+  ceilings: blocks overhead either block or are walked under. Player/captive (0.98) and
+  ants (0.9) all fit through 1-block holes, as in the original. Out-of-bounds is
   infinitely solid, which is what keeps everyone inside the map.
 - **Cells vs world**: world is centered on the origin — cell `(ix, iz)`, `ix/iz` in
   −64…63, spans world `[ix, ix+1) × [iz, iz+1)`; centers are at `+0.5`. North = −z. The
@@ -95,17 +95,20 @@ constructor, chosen so spawn → captive yard → gate are mutually reachable by
   not ants) can step over, flanked by 3–5 high walls, opening through the south map edge.
 - **Gate zone** = the walled gatehouse pocket (z > 59.2, −19 < x < −3, y < 1.5).
 - **Captive** (50.5, 0, −48.5): a yard in the far north-east walled 5–6 high on three
-  sides, open to the west — its south wall has a real 1-block ground arch only ants fit
-  through.
+  sides, open to the west — its south wall has a real 1-block ground arch that ants and
+  the player alike crawl through.
 
 If you touch `src/city.js` physics or the key positions, run `npm test`.
 
 ## Tuning constants that interact
 
 - Jump velocity 8.6 with gravity 25 → apex ≈ 1.4 blocks: clears 1-block ledges mid-air, never 2.
-- Actor body heights: player/captive 1.5 (fits 2-level arches), ants 0.9 (fits 1-level holes).
-  Raising the player's past 2.0 seals real doorways; lowering it under 1.0 lets the player
-  crawl through ant holes and trivialize the yard.
+- Actor body heights: player/captive 0.98, ants 0.9 — everyone fits 1-block holes, faithful
+  to the original. Keep the player's just under 1.0: at exactly 1.0 `canOccupy`'s strict
+  less-than sits on a float knife edge, and past it the ant arches seal up again. What keeps
+  ants out of the gate pocket is their `maxStep` 0.06, not height. The humanoid visual is
+  scaled to 0.96 in `figures.js` (FIG_SCALE) so it fits under arches without clipping, and
+  grenades release from y+0.7 (main.js) — below any 1-block arch ceiling.
 - The captive yard's walls are 5–6 high, the perimeter wall 2–6 — unclimbable (step ≤1, jump <2).
 - Grenade fuse 1.1s / throw speed 7.5 / blast 3.5 are tuned together so a lob intercepts an ant
   charging at CHASE_SPEED 2.7 from ~6–9 units. Lengthening the fuse makes grenades whiff.
