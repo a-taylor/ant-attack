@@ -72,11 +72,11 @@ Everything flows from this:
 | `src/main.js` | Bootstrap, game state machine (`title/playing/won/lost`), win-lose rules, timer, wiring between modules. Owns the `game` object (lives, grenades, timeLeft). |
 | `src/city.js` | Map loader (from `src/mapdata.js`) + `moveActor` physics + voxel queries (`mask`, `floorUnder`, `ceilingAbove`, `solidAt`, `canOccupy`) + instanced mesh. Owns `spawnPos`/`captivePos`/`gatePos` (design choices layered on the real geometry). Exports `SIZE` (128) and `HALF` (64). |
 | `src/mapdata.js` | Generated file: the extracted original city as a base64-alphabet string, one char per column mask. Regenerate via the extraction pipeline; don't hand-edit. |
-| `src/player.js` | Camera-relative movement, jump, knockback/invuln. `facing` = last move dir, used to aim grenades. |
+| `src/player.js` | Grid-axis movement (via the camera's snapped basis), jump, knockback/invuln. `facing` = last move dir, used to aim grenades. |
 | `src/ants.js` | `AntManager` + `Ant`: wander → chase (range 12), sidestep-when-stuck, death anim, respawn after 15s via `city.randomStreetPos`. Ants are **ground-only** (they pass `maxStep: 0.06` to `moveActor`, so even 1-block steps stop them) and their bite has vertical tolerance < 1 block — rooftops are the player's refuge, faithful to the original. |
 | `src/grenades.js` | Lob + bounce + fuse (1.1s) + blast (r=3.5). Damage is applied via the `onExplode` callback wired in main.js — grenades know nothing about ants. Explosion lights come from a fixed pool of 3 kept in the scene at intensity 0 — never add/remove lights at runtime, it changes the light count and recompiles every material (visible hitch). |
 | `src/captive.js` | Waves until freed, then follow-the-leader with catch-up teleport past 24 units. |
-| `src/camera.js` | `FollowCamera`: yaw/pitch/dist orbit, Q/E snaps `targetYaw` to 90° stops, smooth lerp. Its `forward`/`right` getters define movement axes for the player. |
+| `src/camera.js` | `FollowCamera`: yaw/pitch/dist orbit, Q/E snaps `targetYaw` between the four grid-diagonal stops (45°/135°/…, exported `DIAGONAL`) — corner-on two-face views like the original's, never face-on. Its `forward`/`right` getters are the player's movement axes and are **snapped to the city grid** (`moveYaw` = view yaw rounded down to its quadrant), so single keys walk city axes (screen diagonals) and combos walk city diagonals — not the raw view direction. |
 | `src/figures.js` | Shared blocky-humanoid builder (player + captive), walk animation, blob shadows. |
 | `src/hud.js` | DOM HUD (markup lives in `index.html`). `showEnd` replaces the overlay's innerHTML, destroying the title-screen markup — restart therefore goes straight to `playing`, never back to `title`. |
 | `src/input.js` | Key state + edge-triggered `consumePressed` + pointer-drag accumulation. Uses `e.code` (`KeyW`, `Digit1`…). |
@@ -113,7 +113,8 @@ If you touch `src/city.js` physics or the key positions, run `npm test`.
 - Grenade fuse 1.1s / throw speed 7.5 / blast 3.5 are tuned together so a lob intercepts an ant
   charging at CHASE_SPEED 2.7 from ~6–9 units. Lengthening the fuse makes grenades whiff.
 - Camera pitch 0.95 rad at dist 15 is the minimum-ish elevation that still sees over the
-  gatehouse walls when the player stands at spawn; lowering it hides the player behind them.
+  gatehouse walls when the player stands at spawn (verified from the diagonal views too);
+  lowering it hides the player behind them.
 
 ## Conventions
 

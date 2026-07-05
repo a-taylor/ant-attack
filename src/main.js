@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { City } from './city.js';
 import { Input } from './input.js';
-import { FollowCamera } from './camera.js';
+import { FollowCamera, DIAGONAL } from './camera.js';
 import { Player } from './player.js';
 import { AntManager } from './ants.js';
 import { GrenadeManager } from './grenades.js';
@@ -72,13 +72,13 @@ function resetRound() {
   captive.reset(city.captivePos);
   ants.reset(player.pos);
   grenades.clear();
-  followCam.targetYaw = 0;
-  followCam.yaw = 0;
+  followCam.targetYaw = DIAGONAL;
+  followCam.yaw = DIAGONAL;
   followCam.snapTo(player.pos);
   hud.setTime(game.timeLeft);
   hud.setLives(game.lives);
   hud.setGrenades(game.grenadeCount);
-  hud.setObjective('RESCUE THE CAPTIVE — THEY ARE HELD IN A WALLED YARD IN THE NORTH-WEST');
+  hud.setObjective('RESCUE THE CAPTIVE — THEY ARE HELD IN A WALLED YARD IN THE NORTH-EAST');
 }
 
 function startGame() {
