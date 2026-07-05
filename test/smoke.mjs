@@ -31,9 +31,9 @@ check(`streets exist (${streets} cells)`, streets > 10000);
 // landmark spot-checks against the independently verified extraction:
 // gatehouse low step-over wall, the captive yard's ant-sized ground arch,
 // and the northern canopy roof slab
-check('gatehouse low wall', [8, 9, 10, 11, 12, 13].every((x) => city.mask(x, 58) === 0b000001));
-check('yard ground arch (ants only)', city.mask(-48, -44) === 0b011110);
-check('northern canopy roof', city.mask(-36, -56) === 0b010000);
+check('gatehouse low wall', [-14, -13, -12, -11, -10, -9].every((x) => city.mask(x, 58) === 0b000001));
+check('yard ground arch (ants only)', city.mask(47, -44) === 0b011110);
+check('northern canopy roof', city.mask(35, -56) === 0b010000);
 
 // out-of-bounds is solid (nothing can leave the world)
 check('OOB solid', city.maxH(-HALF - 2, 10, 0.3) === 9 && city.maxH(10, HALF + 2, 0.3) === 9);
@@ -51,16 +51,16 @@ for (let i = 0; i < 600; i++) {
 }
 check(`wandering walk stays on terrain (y=${actor.pos.y.toFixed(2)})`, ok);
 
-// blocked by the perimeter wall (west wall from inside)
-const w = { pos: new THREE.Vector3(-55.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+// blocked by the perimeter wall (east wall from inside)
+const w = { pos: new THREE.Vector3(55.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 for (let i = 0; i < 500; i++) {
-  w.vel.x = -4.6; w.vel.z = 0;
+  w.vel.x = 4.6; w.vel.z = 0;
   city.moveActor(w, 1 / 60);
 }
-check(`wall keeps player inside (x=${w.pos.x.toFixed(2)}, y=${w.pos.y.toFixed(2)})`, w.pos.x > -63.9 && w.pos.y <= 1.2);
+check(`wall keeps player inside (x=${w.pos.x.toFixed(2)}, y=${w.pos.y.toFixed(2)})`, w.pos.x < 63.9 && w.pos.y <= 1.2);
 
 // steps over the gatehouse's 1-high wall while walking (and down the far side)
-const s = { pos: new THREE.Vector3(11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+const s = { pos: new THREE.Vector3(-11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 let stepApex = 0;
 for (let i = 0; i < 240; i++) {
   s.vel.x = 0; s.vel.z = 3;
@@ -70,7 +70,7 @@ for (let i = 0; i < 240; i++) {
 check(`steps over gate wall (apex=${stepApex.toFixed(2)}, z=${s.pos.z.toFixed(2)})`, stepApex >= 1 && s.pos.z > 59.5 && s.pos.y === 0);
 
 // ants pass maxStep 0.06 — the same 1-high wall must stop them (ants can't climb)
-const ant = { pos: new THREE.Vector3(11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
+const ant = { pos: new THREE.Vector3(-11.5, 0, 56.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
 for (let i = 0; i < 240; i++) {
   ant.vel.x = 0; ant.vel.z = 3;
   city.moveActor(ant, 1 / 60, { maxStep: 0.06, height: 0.9 });
@@ -78,7 +78,7 @@ for (let i = 0; i < 240; i++) {
 check(`ant blocked by 1-block step (z=${ant.pos.z.toFixed(2)})`, ant.pos.y === 0 && ant.pos.z < 57.8);
 
 // ...but an ant's low body crawls through the yard's 1-block ground arch
-const crawler = { pos: new THREE.Vector3(-47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
+const crawler = { pos: new THREE.Vector3(47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.35, onGround: true };
 for (let i = 0; i < 240; i++) {
   crawler.vel.x = 0; crawler.vel.z = -3;
   city.moveActor(crawler, 1 / 60, { maxStep: 0.06, height: 0.9 });
@@ -86,7 +86,7 @@ for (let i = 0; i < 240; i++) {
 check(`ant crawls through ground arch (z=${crawler.pos.z.toFixed(2)})`, crawler.pos.z < -44.5 && crawler.pos.y === 0);
 
 // the player is too tall for that arch
-const tall = { pos: new THREE.Vector3(-47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+const tall = { pos: new THREE.Vector3(47.5, 0, -42.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 for (let i = 0; i < 240; i++) {
   tall.vel.x = 0; tall.vel.z = -3;
   city.moveActor(tall, 1 / 60);
@@ -94,17 +94,17 @@ for (let i = 0; i < 240; i++) {
 check(`player blocked by ant-sized arch (z=${tall.pos.z.toFixed(2)})`, tall.pos.z > -43.5);
 
 // walks freely under the northern canopy (roof slab at level 4, open below)
-const c = { pos: new THREE.Vector3(-39.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
+const c = { pos: new THREE.Vector3(39.5, 0, -55.5), vel: new THREE.Vector3(), radius: 0.3, onGround: true };
 let underOk = true;
 for (let i = 0; i < 300; i++) {
-  c.vel.x = 3; c.vel.z = 0;
+  c.vel.x = -3; c.vel.z = 0;
   city.moveActor(c, 1 / 60);
   if (c.pos.y !== 0) underOk = false;
 }
-check(`walks under canopy (x=${c.pos.x.toFixed(2)})`, underOk && c.pos.x > -29);
+check(`walks under canopy (x=${c.pos.x.toFixed(2)})`, underOk && c.pos.x < 29);
 
 // jumping under a 2-level arch bumps the head on its underside
-const b = { pos: new THREE.Vector3(-28.5, 0, -45.5), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
+const b = { pos: new THREE.Vector3(28.5, 0, -45.5), vel: new THREE.Vector3(0, 8.6, 0), radius: 0.3, onGround: false };
 let bumpApex = 0;
 for (let i = 0; i < 120; i++) {
   city.moveActor(b, 1 / 60);

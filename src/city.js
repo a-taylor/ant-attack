@@ -32,10 +32,10 @@ export class City {
 
     // fixed key positions on the real architecture (design choices):
     // spawn just inside the gatehouse's low step-over wall (south),
-    // captive in the high-walled yard in the far north-west.
-    this.spawnPos = new THREE.Vector3(11.5, 0, 55.5);
-    this.gatePos = new THREE.Vector3(11.5, 0, 61.5);
-    this.captivePos = new THREE.Vector3(-50.5, 0, -48.5);
+    // captive in the high-walled yard in the far north-east.
+    this.spawnPos = new THREE.Vector3(-11.5, 0, 55.5);
+    this.gatePos = new THREE.Vector3(-11.5, 0, 61.5);
+    this.captivePos = new THREE.Vector3(50.5, 0, -48.5);
 
     this.group = this.buildMeshes();
   }
@@ -170,7 +170,7 @@ export class City {
 
   // the walled pocket between the gatehouse's low wall and the open south edge
   inGateZone(pos) {
-    return pos.z > 59.2 && pos.x > 3 && pos.x < 19 && pos.y < 1.5;
+    return pos.z > 59.2 && pos.x > -19 && pos.x < -3 && pos.y < 1.5;
   }
 
   // random fully-open street cell, at least minDist and at most maxDist from `away`
@@ -256,7 +256,7 @@ export class City {
     // step-over wall (the wall top is at y=1)
     const postGeo = new THREE.BoxGeometry(0.3, 3.4, 0.3);
     const postMat = new THREE.MeshLambertMaterial({ color: 0xffd24a });
-    for (const px of [8.5, 13.5]) {
+    for (const px of [-13.5, -8.5]) {
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.set(px, 1 + 1.7, 58.5);
       group.add(post);

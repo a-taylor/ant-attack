@@ -4,7 +4,8 @@ Browser-based 3D recreation of **Ant Attack** (ZX Spectrum, 1983, Sandy White) i
 Vanilla JS + Vite, no framework, no assets — all geometry, sound, and UI are generated in code.
 The city is the **real Antescher**, byte-extracted from the original ZX Spectrum snapshot
 (see `ant_attack_original_map_extraction.md` and `extract_ant_attack_map.py`; regenerate
-`src/mapdata.js` from their JSON output with the rotation documented in that file's header).
+`src/mapdata.js` from their JSON output with `gen_mapdata.py` — the axis mapping lives there
+and nowhere else).
 
 ## Commands
 
@@ -59,8 +60,10 @@ Everything flows from this:
   infinitely solid, which is what keeps everyone inside the map.
 - **Cells vs world**: world is centered on the origin — cell `(ix, iz)`, `ix/iz` in
   −64…63, spans world `[ix, ix+1) × [iz, iz+1)`; centers are at `+0.5`. North = −z. The
-  map is stored rotated 90° from the raw snapshot axes so the city gate faces south (+z);
-  the captive yard is in the north-west.
+  map's axes are swapped vs the raw snapshot's naming (game x = raw z, game z = raw x) so
+  the city gate faces south (+z) and the city is unmirrored — Sandy White's "© S W"
+  signature glyphs in the north-west corner must read correctly, not mirror-imaged.
+  The captive yard is in the north-east.
 
 ### Module map
 
@@ -83,15 +86,16 @@ Everything flows from this:
 
 The static geometry is the original game's data — treat `src/mapdata.js` as read-only ground
 truth. Never "fix" the city by editing masks; if something seems wrong, suspect the loader,
-the rotation, or the physics instead. Key positions are design choices in `City`'s
+the axis mapping in `gen_mapdata.py`, or the physics instead. Key positions are design
+choices in `City`'s
 constructor, chosen so spawn → captive yard → gate are mutually reachable by walking
 (step ≤ 1, any drop; `test/map.mjs` proves it):
 
-- **Spawn** (11.5, 0, 55.5): just inside the gatehouse — a low 1-high wall the player (but
+- **Spawn** (−11.5, 0, 55.5): just inside the gatehouse — a low 1-high wall the player (but
   not ants) can step over, flanked by 3–5 high walls, opening through the south map edge.
-- **Gate zone** = the walled gatehouse pocket (z > 59.2, 3 < x < 19, y < 1.5).
-- **Captive** (−50.5, 0, −48.5): a yard in the far north-west walled 5–6 high on three
-  sides, open to the east — its south wall has a real 1-block ground arch only ants fit
+- **Gate zone** = the walled gatehouse pocket (z > 59.2, −19 < x < −3, y < 1.5).
+- **Captive** (50.5, 0, −48.5): a yard in the far north-east walled 5–6 high on three
+  sides, open to the west — its south wall has a real 1-block ground arch only ants fit
   through.
 
 If you touch `src/city.js` physics or the key positions, run `npm test`.
