@@ -2,7 +2,12 @@ export class Hud {
   constructor() {
     this.timerEl = document.getElementById('timer');
     this.livesEl = document.getElementById('lives');
+    this.captiveEl = document.getElementById('captive');
     this.grenadesEl = document.getElementById('grenades');
+    this.chargeBoxEl = document.getElementById('chargebox');
+    this.chargeEl = document.getElementById('charge');
+    this.rescuedEl = document.getElementById('rescued');
+    this.scannerEl = document.getElementById('scanner');
     this.objectiveEl = document.getElementById('objective');
     this.messageEl = document.getElementById('message');
     this.overlayEl = document.getElementById('overlay');
@@ -23,6 +28,27 @@ export class Hud {
 
   setGrenades(n) {
     this.grenadesEl.textContent = String(n);
+  }
+
+  setCaptiveLives(n) {
+    this.captiveEl.textContent = '♥'.repeat(Math.max(0, n)) || '—';
+  }
+
+  // "number rescued" counter — how many of the total captives are home safe
+  setRescued(n, total) {
+    this.rescuedEl.textContent = `${n}/${total}`;
+  }
+
+  // scan indicator: green while facing the current objective, red otherwise
+  // (the original's "scan indicator" — see retrogames.biz manual)
+  setScanner(onTarget) {
+    this.scannerEl.classList.toggle('on', onTarget);
+  }
+
+  // throw-charge indicator: filled segments per distance tier; tier < 0 hides it
+  setCharge(tier, total = 4) {
+    this.chargeBoxEl.classList.toggle('hidden', tier < 0);
+    if (tier >= 0) this.chargeEl.textContent = '■'.repeat(tier + 1) + '·'.repeat(total - tier - 1);
   }
 
   setObjective(text) {

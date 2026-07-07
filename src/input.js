@@ -2,6 +2,7 @@ export class Input {
   constructor(dom) {
     this.down = new Set();
     this.pressed = new Set(); // edge-triggered, consumed once per frame
+    this.released = new Set(); // same, for key-up (hold-to-charge throws)
     this.dragDX = 0;
     this._dragging = false;
 
@@ -12,7 +13,10 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
         e.preventDefault();
     });
-    window.addEventListener('keyup', (e) => this.down.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      this.down.delete(e.code);
+      this.released.add(e.code);
+    });
     window.addEventListener('blur', () => this.down.clear());
 
     dom.addEventListener('pointerdown', (e) => {
@@ -39,8 +43,21 @@ export class Input {
     return false;
   }
 
+  consumeReleased(code) {
+    if (this.released.has(code)) {
+      this.released.delete(code);
+      return true;
+    }
+    return false;
+  }
+
+  isDown(code) {
+    return this.down.has(code);
+  }
+
   endFrame() {
     this.pressed.clear();
+    this.released.clear();
     this.dragDX = 0;
   }
 }

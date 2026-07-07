@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { buildHumanoid, walkAnim, makeBlobShadow, updateBlobShadow } from './figures.js';
+import { sfx } from './sfx.js';
 
 const FOLLOW_SPEED = 4.2;
 const STOP_DIST = 1.9;
+export const CAPTIVE_HEALTH = 3;
 
 export class Captive {
   constructor(city, scene) {
@@ -12,6 +14,8 @@ export class Captive {
     this.radius = 0.3;
     this.onGround = true;
     this.freed = false;
+    this.health = CAPTIVE_HEALTH;
+    this.invuln = 0;
     this.walkPhase = 0;
     this.waveTime = 0;
     this.visualY = 0;
@@ -30,15 +34,35 @@ export class Captive {
     this.pos.copy(startPos);
     this.vel.set(0, 0, 0);
     this.freed = false;
+    this.health = CAPTIVE_HEALTH;
+    this.invuln = 0;
     this.visualY = startPos.y;
     this.mesh.position.copy(startPos);
+    this.mesh.visible = true;
   }
 
   free() {
     this.freed = true;
   }
 
+  // same knockback/invuln pattern as the player's hit()
+  hit(fromPos) {
+    if (this.invuln > 0) return false;
+    this.invuln = 1.6;
+    this.health--;
+    const away = this.pos.clone().sub(fromPos).setY(0);
+    if (away.lengthSq() < 0.001) away.set(0, 0, 1);
+    away.normalize();
+    this.vel.x = away.x * 5;
+    this.vel.z = away.z * 5;
+    sfx('hit');
+    return true;
+  }
+
   update(dt, playerPos) {
+    if (this.invuln > 0) this.invuln -= dt;
+    this.mesh.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
+
     if (!this.freed) {
       // wave for help
       this.waveTime += dt;

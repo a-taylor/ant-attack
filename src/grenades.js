@@ -3,13 +3,21 @@ import { sfx } from './sfx.js';
 
 const FUSE = 1.1;
 const GRAVITY = 22;
-const BLAST_RADIUS = 3.5;
+export const KILL_RADIUS = 3.5;
+export const STUN_RADIUS = 5.5; // near-miss ring: paralyses instead of killing
+
+// hold-to-charge throw: each tier is a lob speed — the charge-based take on
+// the original's S/D/F/G four fixed distances. Tier 1 is the old tuned 7.5.
+export const THROW_TIERS = [4, 7.5, 11, 14.5];
+export const CHARGE_STEP = 0.33; // seconds of hold per tier, capped at the top tier
+export const tierForHold = (held) =>
+  Math.min(THROW_TIERS.length - 1, Math.floor(held / CHARGE_STEP));
 
 export class GrenadeManager {
   constructor(scene, city, onExplode) {
     this.scene = scene;
     this.city = city;
-    this.onExplode = onExplode; // (pos, radius) => void
+    this.onExplode = onExplode; // (pos, killRadius, stunRadius) => void
     this.grenades = [];
     this.explosions = [];
     this.geo = new THREE.SphereGeometry(0.14, 8, 6);
@@ -26,13 +34,13 @@ export class GrenadeManager {
     }
   }
 
-  throw(origin, dir) {
+  throw(origin, dir, speed = THROW_TIERS[1]) {
     const mesh = new THREE.Mesh(this.geo, this.mat);
     mesh.position.copy(origin);
     this.scene.add(mesh);
     this.grenades.push({
       pos: origin.clone(),
-      vel: new THREE.Vector3(dir.x * 7.5, 7.2, dir.z * 7.5),
+      vel: new THREE.Vector3(dir.x * speed, 7.2, dir.z * speed),
       fuse: FUSE,
       mesh,
     });
@@ -55,7 +63,7 @@ export class GrenadeManager {
       light.position.copy(boom.position);
     }
     this.explosions.push({ mesh: boom, light, t: 0 });
-    this.onExplode(g.pos, BLAST_RADIUS);
+    this.onExplode(g.pos, KILL_RADIUS, STUN_RADIUS);
   }
 
   update(dt) {
@@ -103,7 +111,7 @@ export class GrenadeManager {
       const e = this.explosions[i];
       e.t += dt;
       const k = e.t / 0.35;
-      e.mesh.scale.setScalar(0.4 + k * BLAST_RADIUS);
+      e.mesh.scale.setScalar(0.4 + k * KILL_RADIUS);
       e.mesh.material.opacity = Math.max(0, 0.95 * (1 - k));
       if (e.light) e.light.intensity = Math.max(0, 60 * (1 - k * 1.4));
       if (k >= 1) {

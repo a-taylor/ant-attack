@@ -62,6 +62,19 @@ check('gate reachable from spawn', fromSpawn.has(key(...gateCell, 0)));
 const fromCaptive = bfs(...captiveCell);
 check('gate reachable from captive yard', fromCaptive.has(key(...gateCell, 0)));
 
+// all 10 fixed round-locations (one relocated captive per round, like the
+// original's 10 levels) must be reachable both from spawn and back to the
+// gate, or a shuffled playthrough could hand out an unwinnable round
+check('exactly 10 fixed captive spots', city.captiveSpots.length === 10);
+for (const spot of city.captiveSpots) {
+  const cell = [Math.floor(spot.x), Math.floor(spot.z)];
+  const label = `spot (${spot.x}, ${spot.z})`;
+  check(`${label} is open ground`, city.mask(...cell) === 0);
+  check(`${label} reachable from spawn`, fromSpawn.has(key(...cell, 0)));
+  const fromSpot = bfs(...cell);
+  check(`gate reachable from ${label}`, fromSpot.has(key(...gateCell, 0)));
+}
+
 // the whole city floor is one walkable space
 let ground = 0, groundReach = 0;
 for (let iz = -HALF + 1; iz < HALF - 1; iz++)

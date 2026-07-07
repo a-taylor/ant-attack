@@ -6,10 +6,14 @@ const CHASE_RANGE = 12;
 const WANDER_SPEED = 1.3;
 const CHASE_SPEED = 2.7;
 const RESPAWN_TIME = 15;
+export const STUN_TIME = 10;
+export const ANT_TOP = 0.9; // standing height of a paralysed ant's back (= its body height)
+const ANT_COLOR = 0x1c1c24;
+const STUN_COLOR = 0x707a96;
 
 function buildAntMesh() {
   const g = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: 0x1c1c24 });
+  const mat = new THREE.MeshLambertMaterial({ color: ANT_COLOR });
   const box = (w, h, d) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 
   const abdomen = box(0.6, 0.45, 0.8);
@@ -38,7 +42,7 @@ function buildAntMesh() {
     }
   }
   g.add(abdomen, thorax, head, antL, antR);
-  return { mesh: g, legs };
+  return { mesh: g, legs, mat };
 }
 
 class Ant {
@@ -54,12 +58,14 @@ class Ant {
     this.dead = false;
     this.deathAnim = 0;
     this.respawnTimer = 0;
+    this.stunTimer = 0;
     this.legPhase = Math.random() * 10;
     this.visualY = 0;
 
-    const { mesh, legs } = buildAntMesh();
+    const { mesh, legs, mat } = buildAntMesh();
     this.mesh = mesh;
     this.legs = legs;
+    this.mat = mat;
     this.shadow = makeBlobShadow(0.4);
     scene.add(this.mesh, this.shadow);
   }
@@ -69,6 +75,8 @@ class Ant {
     this.vel.set(0, 0, 0);
     this.dead = false;
     this.deathAnim = 0;
+    this.stunTimer = 0;
+    this.mat.color.setHex(ANT_COLOR);
     this.visualY = p.y;
     this.mesh.visible = true;
     this.shadow.visible = true;
@@ -79,9 +87,26 @@ class Ant {
   kill() {
     if (this.dead) return;
     this.dead = true;
+    this.stunTimer = 0;
     this.deathAnim = 0.7;
     this.respawnTimer = RESPAWN_TIME;
     sfx('antdie');
+  }
+
+  get stunned() {
+    return this.stunTimer > 0;
+  }
+
+  paralyse() {
+    if (this.dead) return;
+    if (this.stunTimer <= 0) {
+      // keel over: legs splay out and the ant greys out until it wakes
+      for (let i = 0; i < this.legs.length; i++) this.legs[i].rotation.x = (i % 2 ? 1 : -1) * 1.1;
+      sfx('stun');
+    }
+    this.stunTimer = STUN_TIME; // re-stunning just refreshes the timer
+    this.vel.set(0, 0, 0);
+    this.mat.color.setHex(STUN_COLOR);
   }
 
   update(dt, playerPos, playerAlive) {
@@ -96,6 +121,18 @@ class Ant {
         }
       }
       return;
+    }
+
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      if (this.stunTimer > 0) {
+        // inert: no AI, no bite; blink back toward body color just before waking
+        const wakingBlink = this.stunTimer < 1.5 && Math.floor(this.stunTimer * 8) % 2 === 0;
+        this.mat.color.setHex(wakingBlink ? ANT_COLOR : STUN_COLOR);
+        return;
+      }
+      this.mat.color.setHex(ANT_COLOR);
+      this.wanderTimer = 0; // wake with a fresh heading
     }
 
     const toPlayer = playerPos.clone().sub(this.pos);
@@ -173,20 +210,57 @@ export class AntManager {
   // height is the refuge from ants, as in the original
   touching(pos, reach = 0.85) {
     return this.ants.filter(
-      (a) => !a.dead &&
+      (a) => !a.dead && !a.stunned &&
         Math.hypot(a.pos.x - pos.x, a.pos.z - pos.z) < reach &&
         Math.abs(a.pos.y - pos.y) < 0.8
     );
   }
 
-  damageAt(pos, radius) {
-    let kills = 0;
+  // kill inside killRadius; the outer ring is a near miss that stuns instead
+  damageAt(pos, killRadius, stunRadius = 0) {
+    let kills = 0, stuns = 0;
     for (const a of this.ants) {
-      if (!a.dead && a.pos.distanceTo(pos) < radius) {
+      if (a.dead) continue;
+      const d = a.pos.distanceTo(pos);
+      if (d < killRadius) {
         a.kill();
         kills++;
+      } else if (d < stunRadius) {
+        if (!a.stunned) stuns++;
+        a.paralyse();
       }
     }
-    return kills;
+    return { kills, stuns };
+  }
+
+  // the player landed at pos while falling: stun the ant under their feet,
+  // or crush it if it was already stunned
+  stompAt(pos, reach = 0.7) {
+    for (const a of this.ants) {
+      if (a.dead) continue;
+      const dy = pos.y - a.pos.y;
+      if (dy < -0.3 || dy > ANT_TOP + 0.05) continue;
+      if (Math.hypot(a.pos.x - pos.x, a.pos.z - pos.z) >= reach) continue;
+      if (a.stunned) {
+        a.kill();
+        return 'kill';
+      }
+      a.paralyse();
+      return 'stun';
+    }
+    return null;
+  }
+
+  // a stunned ant's back is standable ground — fed to moveActor's `support`
+  // option for the player. Live ants give no support (you fall through and
+  // stomp them instead), and ants themselves ignore it, so a stunned ant
+  // never blocks other ants from reaching the captive.
+  supportAt(x, z, reach = 0.65) {
+    let top = 0;
+    for (const a of this.ants) {
+      if (a.dead || !a.stunned) continue;
+      if (Math.hypot(a.pos.x - x, a.pos.z - z) < reach) top = Math.max(top, a.pos.y + ANT_TOP);
+    }
+    return top;
   }
 }

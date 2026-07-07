@@ -38,6 +38,28 @@ export class City {
     this.gatePos = new THREE.Vector3(-11.5, 0, 61.5);
     this.captivePos = new THREE.Vector3(50.5, 0, -48.5);
 
+    // The 10 fixed captive locations for a full playthrough (the original
+    // game's "10 different levels all in the same city" — one captive
+    // rescued per round, relocated each time). Design choices layered on
+    // the real geometry, not extracted data: hand-picked via farthest-point
+    // sampling over BFS-reachable open ground cells (see find_spots.mjs) so
+    // they're spread across every quarter of the map and each a real trek
+    // from spawn (>=15 units) and mutually reachable with the gate — the
+    // NE yard (captivePos, also the single farthest spot) is kept as one of
+    // them for continuity with the original single-captive design.
+    this.captiveSpots = [
+      this.captivePos.clone(),
+      new THREE.Vector3(-61.5, 0, -46.5),
+      new THREE.Vector3(51.5, 0, 28.5),
+      new THREE.Vector3(-4.5, 0, -10.5),
+      new THREE.Vector3(-58.5, 0, 10.5),
+      new THREE.Vector3(0.5, 0, -59.5),
+      new THREE.Vector3(-56.5, 0, 54.5),
+      new THREE.Vector3(39.5, 0, -9.5),
+      new THREE.Vector3(9.5, 0, 24.5),
+      new THREE.Vector3(-25.5, 0, 22.5),
+    ];
+
     this.group = this.buildMeshes();
   }
 
@@ -143,7 +165,9 @@ export class City {
   // shared kinematics for player / ants / captive. actor: {pos, vel, radius, onGround}
   // Grounded actors auto-step up single blocks; taller obstacles stop them.
   // `height` is body height: blocks overhead block or are walked under.
-  moveActor(a, dt, { gravity = 25, maxStep = 1.06, height = BODY_H } = {}) {
+  // `support(x, z)` optionally adds dynamic standable surfaces (e.g. a
+  // paralysed ant's back) on top of the static voxel floor.
+  moveActor(a, dt, { gravity = 25, maxStep = 1.06, height = BODY_H, support } = {}) {
     const step = a.onGround ? maxStep : 0.06;
     const nx = a.pos.x + a.vel.x * dt;
     if (this.canOccupy(nx, a.pos.z, a.radius, a.pos.y, step, height)) a.pos.x = nx;
@@ -158,7 +182,13 @@ export class City {
       const ceil = this.ceilingAbove(a.pos.x, a.pos.z, a.radius * 0.85, a.pos.y, height);
       if (ny + height > ceil) { ny = ceil - height; a.vel.y = 0; }
     }
-    const floor = this.floorUnder(a.pos.x, a.pos.z, a.radius * 0.85, a.pos.y, step);
+    let floor = this.floorUnder(a.pos.x, a.pos.z, a.radius * 0.85, a.pos.y, step);
+    if (support) {
+      // same step-up rule as real blocks, so a body can't pop onto a
+      // dynamic surface from below it
+      const s = support(a.pos.x, a.pos.z);
+      if (s > floor && s <= a.pos.y + step) floor = s;
+    }
     if (ny <= floor + 1e-3) {
       ny = floor;
       a.vel.y = 0;
@@ -172,6 +202,17 @@ export class City {
   // the walled pocket between the gatehouse's low wall and the open south edge
   inGateZone(pos) {
     return pos.z > 59.2 && pos.x > -19 && pos.x < -3 && pos.y < 1.5;
+  }
+
+  // the 10 fixed captive spots in a fresh random order — Fisher-Yates so
+  // every round of a playthrough gets a different, non-repeating location
+  shuffledCaptiveSpots() {
+    const spots = this.captiveSpots.map((p) => p.clone());
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    return spots;
   }
 
   // random fully-open street cell, at least minDist and at most maxDist from `away`

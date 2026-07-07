@@ -48,6 +48,7 @@ export function sfx(name) {
       case 'boom': noise(0.5, 0.3); tone(120, 40, 0.4, 0.2, 'sawtooth'); break;
       case 'hit': tone(220, 60, 0.25, 0.2, 'sawtooth'); break;
       case 'antdie': tone(700, 90, 0.2, 0.1); break;
+      case 'stun': tone(420, 160, 0.18, 0.1); tone(200, 90, 0.14, 0.08, 'square', 0.1); break;
       case 'rescue':
         tone(440, 440, 0.1, 0.12); tone(554, 554, 0.1, 0.12, 'square', 0.1);
         tone(659, 659, 0.18, 0.12, 'square', 0.2);

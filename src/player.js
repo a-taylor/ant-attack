@@ -19,6 +19,7 @@ export class Player {
     this.onGround = true;
     this.facing = new THREE.Vector3(0, 0, -1);
     this.invuln = 0;
+    this.support = null; // dynamic floor callback (paralysed ants), wired in main.js
     this.walkPhase = 0;
     this.visualY = 0;
 
@@ -83,7 +84,7 @@ export class Player {
       sfx('jump');
     }
 
-    this.city.moveActor(this, dt);
+    this.city.moveActor(this, dt, { support: this.support });
 
     if (move.lengthSq() > 0) this.facing.copy(move);
     if (this.invuln > 0) this.invuln -= dt;

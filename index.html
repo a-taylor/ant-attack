@@ -37,7 +37,24 @@
     }
     #hud #timer.low { color: var(--bad); animation: blink 0.5s steps(2) infinite; }
     #hud #lives { color: var(--bad); }
+    #hud #captive { color: #ff9ab0; }
     #hud #grenades { color: var(--accent); }
+    #hud #rescued { color: #8adfff; }
+    #hud #charge { color: var(--accent); letter-spacing: 4px; }
+    #hud .box.hidden { display: none; }
+
+    #hud .box.scan { display: flex; align-items: center; gap: 8px; }
+    #scanner {
+      width: 16px; height: 16px; flex: none;
+      background: var(--bad);
+      border: 2px solid #000;
+      box-shadow: 0 0 4px 1px rgba(255, 90, 90, 0.7);
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+    #scanner.on {
+      background: #33ff6a;
+      box-shadow: 0 0 8px 2px rgba(51, 255, 106, 0.9);
+    }
 
     #objective {
       position: fixed; top: 56px; left: 0; right: 0;
@@ -87,7 +104,11 @@
   <div id="hud">
     <div class="box">TIME <span id="timer">5:00</span></div>
     <div class="box">LIVES <span id="lives">&#9829;&#9829;&#9829;&#9829;&#9829;</span></div>
+    <div class="box">CAPTIVE <span id="captive">&#9829;&#9829;&#9829;</span></div>
+    <div class="box">RESCUED <span id="rescued">0/10</span></div>
     <div class="box">GRENADES <span id="grenades">20</span></div>
+    <div class="box hidden" id="chargebox">THROW <span id="charge"></span></div>
+    <div class="box scan">SCAN <span id="scanner"></span></div>
   </div>
   <div id="objective"></div>
   <div id="message"></div>
@@ -96,16 +117,16 @@
     <h1>ANT ATTACK</h1>
     <h2>THE WALLED CITY OF ANTESCHER &mdash; 1983 / 2026</h2>
     <p>
-      GIANT ANTS HAVE OVERRUN THE CITY.<br>
-      SOMEONE IS TRAPPED INSIDE. RESCUE THEM AND<br>
-      ESCAPE THROUGH THE GATE BEFORE TIME RUNS OUT.
+      GIANT ANTS HAVE OVERRUN THE CITY. TEN CAPTIVES ARE<br>
+      TRAPPED INSIDE, ONE AT A TIME, SOMEWHERE NEW EACH ROUND.<br>
+      FREE EACH ONE AND ESCAPE THROUGH THE GATE TO WIN.
     </p>
     <div class="chars">
       <span id="char-sandy" class="sel">1 &mdash; SANDY</span>
       <span id="char-sandra">2 &mdash; SANDRA</span>
     </div>
     <p style="color:#7a92a8">
-      WASD / ARROWS &mdash; MOVE &nbsp;&nbsp; SPACE &mdash; JUMP &nbsp;&nbsp; G &mdash; GRENADE<br>
+      WASD / ARROWS &mdash; MOVE &nbsp;&nbsp; SPACE &mdash; JUMP &nbsp;&nbsp; HOLD G &mdash; GRENADE (LONGER = FURTHER)<br>
       Q / E &mdash; ROTATE VIEW (MOUSE DRAG TO ORBIT)
     </p>
     <div class="press">PRESS ENTER TO BEGIN</div>
