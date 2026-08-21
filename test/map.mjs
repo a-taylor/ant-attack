@@ -68,10 +68,12 @@ check('gate reachable from captive yard', fromCaptive.has(key(...gateCell, 0)));
 check('exactly 10 fixed captive spots', city.captiveSpots.length === 10);
 for (const spot of city.captiveSpots) {
   const cell = [Math.floor(spot.x), Math.floor(spot.z)];
-  const label = `spot (${spot.x}, ${spot.z})`;
-  check(`${label} is open ground`, city.mask(...cell) === 0);
-  check(`${label} reachable from spawn`, fromSpawn.has(key(...cell, 0)));
-  const fromSpot = bfs(...cell);
+  const L = Math.round(spot.y);
+  const label = `spot (${spot.x}, ${spot.z}) L${L}`;
+  const m = city.mask(...cell);
+  check(`${label} is standable`, standable(m, L));
+  check(`${label} reachable from spawn`, fromSpawn.has(key(...cell, L)));
+  const fromSpot = bfs(...cell, L);
   check(`gate reachable from ${label}`, fromSpot.has(key(...gateCell, 0)));
 }
 

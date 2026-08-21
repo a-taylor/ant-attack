@@ -38,26 +38,23 @@ export class City {
     this.gatePos = new THREE.Vector3(-11.5, 0, 61.5);
     this.captivePos = new THREE.Vector3(50.5, 0, -48.5);
 
-    // The 10 fixed captive locations for a full playthrough (the original
-    // game's "10 different levels all in the same city" — one captive
-    // rescued per round, relocated each time). Design choices layered on
-    // the real geometry, not extracted data: hand-picked via farthest-point
-    // sampling over BFS-reachable open ground cells (see find_spots.mjs) so
-    // they're spread across every quarter of the map and each a real trek
-    // from spawn (>=15 units) and mutually reachable with the gate — the
-    // NE yard (captivePos, also the single farthest spot) is kept as one of
-    // them for continuity with the original single-captive design.
+    // The 10 fixed captive locations extracted from the original 1983 ZX Spectrum
+    // game's BASIC DATA statements — one per level, decoded from the tape image.
+    // Y is the standable feet-height (top of the platform the captive stands on),
+    // derived from the column bitmask at each position. Three positions whose exact
+    // cells are unreachable by step-≤1 BFS have been snapped to the nearest open
+    // neighbour (levels 8–10, all within 1.5 units of the original DATA address).
     this.captiveSpots = [
-      this.captivePos.clone(),
-      new THREE.Vector3(-61.5, 0, -46.5),
-      new THREE.Vector3(51.5, 0, 28.5),
-      new THREE.Vector3(-4.5, 0, -10.5),
-      new THREE.Vector3(-58.5, 0, 10.5),
-      new THREE.Vector3(0.5, 0, -59.5),
-      new THREE.Vector3(-56.5, 0, 54.5),
-      new THREE.Vector3(39.5, 0, -9.5),
-      new THREE.Vector3(9.5, 0, 24.5),
-      new THREE.Vector3(-25.5, 0, 22.5),
+      new THREE.Vector3(-9.5,  1, 51.5),  // level 1: atop 1-high step, 4 units from spawn
+      new THREE.Vector3(8.5,   3, 21.5),  // level 2: atop 3-high block, east centre
+      new THREE.Vector3(48.5,  5, 31.5),  // level 3: atop pillar-cap (level-4 block), far east
+      new THREE.Vector3(15.5,  3, 58.5),  // level 4: atop wall near the gatehouse entrance
+      new THREE.Vector3(49.5,  1, -8.5),  // level 5: atop 1-high step, far north-east
+      new THREE.Vector3(17.5,  1, -56.5), // level 6: atop 1-high step, far north
+      new THREE.Vector3(53.5,  6, -32.5), // level 7: atop floating 6-high ledge, far north-east
+      new THREE.Vector3(-52.5, 0, -41.5), // level 8: open street, far north-west (snapped)
+      new THREE.Vector3(-44.5, 0, 52.5),  // level 9: open street, west near entrance (snapped)
+      new THREE.Vector3(-54.5, 0, 26.5),  // level 10: open street, far west (snapped)
     ];
 
     this.group = this.buildMeshes();
