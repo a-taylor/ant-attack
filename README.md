@@ -1,4 +1,5 @@
 # ANT ATTACK
+**[Play it here](https://a-taylor.github.io/ant-attack/)**
 
 A browser-based 3D recreation of **Ant Attack** (ZX Spectrum, 1983, by Sandy White),
 built with Three.js. Giant ants have overrun the walled city of Antescher. Ten
